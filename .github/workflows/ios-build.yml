@@ -69,10 +69,42 @@ jobs:
             fi
           done
 
+      - name: 🧹 Clean iOS Build Directory
+        run: |
+          echo "Cleaning iOS build directory..."
+          cd ios
+          rm -rf build
+          cd ..
+          rm -rf build/ios
+
       - name: 🏗️ Build Flutter iOS (No Code Sign)
         run: |
           echo "Building Flutter iOS app..."
-          flutter build ios --release --no-codesign --verbose
+          echo "Flutter version:"
+          flutter --version
+          echo "Flutter doctor:"
+          flutter doctor -v
+          echo "Cleaning Flutter build cache..."
+          flutter clean
+          echo "Getting Flutter dependencies..."
+          flutter pub get
+          echo "Starting iOS build..."
+          flutter build ios --release --no-codesign --verbose || {
+            echo "Flutter iOS build failed!"
+            echo "=== Build Environment Info ==="
+            echo "PWD: $(pwd)"
+            echo "iOS files:"
+            ls -la ios/
+            echo "=== Xcode Version ==="
+            xcodebuild -version
+            echo "=== Available iOS Simulators ==="
+            xcrun simctl list devices
+            echo "=== CocoaPods Version ==="
+            pod --version
+            echo "=== Flutter Configuration ==="
+            flutter config
+            exit 1
+          }
 
       - name: 📦 Create unsigned IPA
         run: |
@@ -149,6 +181,13 @@ jobs:
       - name: 🏗️ Build Flutter iOS for release
         run: |
           echo "Building Flutter iOS app for release..."
+          echo "Flutter version:"
+          flutter --version
+          echo "Cleaning Flutter build cache..."
+          flutter clean
+          echo "Getting Flutter dependencies..."
+          flutter pub get
+          echo "Starting iOS build for release..."
           flutter build ios --release --no-codesign --verbose
 
       - name: 💎 Set up Ruby
