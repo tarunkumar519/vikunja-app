@@ -4,10 +4,9 @@ on:
   workflow_dispatch: # allows you to run it manually
   push:
     branches:
-      - main # or your default branch name
-  pull_request:
-    branches:
       - main
+      - 'cursor/**' # All cursor branches
+  pull_request: {} # All pull requests
 
 jobs:
   build-ios:
