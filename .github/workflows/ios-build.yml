@@ -91,70 +91,45 @@ jobs:
           echo "Setting up iOS build environment..."
           export FLUTTER_ROOT=$(flutter config --machine | grep -o '"flutter-root":"[^"]*"' | cut -d'"' -f4)
           export ENABLE_USER_SCRIPT_SANDBOXING=NO
-          export ARCHS=arm64
-          export ONLY_ACTIVE_ARCH=NO
           echo "Starting iOS build..."
-          # Try building with different configurations
-          flutter build ios --release --no-codesign --verbose || {
-            echo "Standard iOS build failed, trying with additional flags..."
-            flutter build ios --release --no-codesign --no-pub --verbose || {
-              echo "iOS build with --no-pub failed, trying workspace build..."
-              cd ios
-              xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -destination generic/platform=iOS -archivePath build/Runner.xcarchive archive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO || {
-                echo "All iOS build methods failed!"
-                echo "=== Build Environment Info ==="
-                echo "PWD: $(pwd)"
-                echo "iOS files:"
-                ls -la ios/
-                echo "=== Xcode Version ==="
-                xcodebuild -version
-                echo "=== Available iOS Simulators ==="
-                xcrun simctl list devices
-                echo "=== CocoaPods Version ==="
-                pod --version
-                echo "=== Flutter Configuration ==="
-                flutter config
-                exit 1
-              }
-            }
-          }
+          
+          # Try Flutter build first
+          echo "Attempting Flutter build..."
+          echo "Current directory: $(pwd)"
+          echo "Flutter doctor:"
+          flutter doctor
+          echo "Starting flutter build ios command..."
+          flutter build ios --release --no-codesign --verbose
+
+      - name: 🔍 Debug build output
+        run: |
+          echo "=== Debugging build output locations ==="
+          echo "Current directory: $(pwd)"
+          echo "Flutter build output:"
+          ls -la build/ios/ || echo "No build/ios directory"
+          echo "Xcode build output:"
+          ls -la ios/build/ || echo "No ios/build directory"
+          if [ -d "ios/build/Build/Products" ]; then
+            echo "Xcode build products:"
+            find ios/build/Build/Products -name "*.app" -type d || echo "No .app files found"
+          fi
+          echo "=== End debug output ==="
 
       - name: 📦 Create unsigned IPA
         run: |
-          # Check if standard Flutter build output exists
-          if [ -d "build/ios/iphoneos/Runner.app" ]; then
-            echo "Using Flutter build output"
-            cd build/ios/iphoneos
-            mkdir -p Payload
-            cp -r Runner.app Payload/
-            zip -r vikunja-unsigned.ipa Payload/
-            echo "Unsigned IPA created successfully from Flutter build"
-            ls -la *.ipa
-          elif [ -d "ios/build/Runner.xcarchive" ]; then
-            echo "Using Xcode archive output"
-            cd ios/build/Runner.xcarchive/Products/Applications
-            mkdir -p Payload
-            cp -r Runner.app Payload/
-            zip -r ../../../../vikunja-unsigned.ipa Payload/
-            cd ../../../../
-            echo "Unsigned IPA created successfully from Xcode archive"
-            ls -la *.ipa
-          else
-            echo "No valid build output found!"
-            echo "Flutter build directory:"
-            ls -la build/ios/ || echo "No build/ios directory"
-            echo "Xcode archive directory:"
-            ls -la ios/build/ || echo "No ios/build directory"
-            exit 1
-          fi
+          echo "Creating unsigned IPA from Flutter build output"
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r vikunja-unsigned.ipa Payload/
+          echo "Unsigned IPA created successfully"
+          ls -la *.ipa
 
       - name: 📤 Upload unsigned IPA as artifact
         uses: actions/upload-artifact@v4
         with:
           name: vikunja-ios-unsigned-ipa
-          path: |
-            build/ios/iphoneos/vikunja-unsigned.ipa
-            vikunja-unsigned.ipa
+          path: build/ios/iphoneos/vikunja-unsigned.ipa
 
   build-ios-signed:
     runs-on: macos-latest
