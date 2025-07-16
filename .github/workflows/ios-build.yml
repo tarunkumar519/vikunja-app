@@ -35,14 +35,44 @@ jobs:
       - name: 📦 Install Flutter dependencies
         run: flutter pub get
 
-      - name: 🍎 Install CocoaPods
+      - name: 🍎 Update CocoaPods and Clean Cache
+        run: |
+          echo "Current CocoaPods version:"
+          pod --version
+          echo "Updating CocoaPods to latest version..."
+          sudo gem install cocoapods
+          echo "Updated CocoaPods version:"
+          pod --version
+          echo "Cleaning CocoaPods cache..."
+          pod cache clean --all
+          echo "Updating CocoaPods repositories..."
+          pod repo update
+
+      - name: 🍎 Install CocoaPods with Retry Logic
         run: |
           cd ios
-          pod install
+          echo "Removing existing Podfile.lock and Pods directory..."
+          rm -rf Podfile.lock Pods
+          echo "Installing CocoaPods dependencies..."
+          for i in {1..3}; do
+            echo "Attempt $i of 3"
+            if pod install --verbose; then
+              echo "Pod install successful"
+              break
+            else
+              echo "Pod install failed, attempt $i"
+              if [ $i -eq 3 ]; then
+                echo "Pod install failed after 3 attempts"
+                exit 1
+              fi
+              sleep 10
+            fi
+          done
 
       - name: 🏗️ Build Flutter iOS (No Code Sign)
         run: |
-          flutter build ios --release --no-codesign
+          echo "Building Flutter iOS app..."
+          flutter build ios --release --no-codesign --verbose
 
       - name: 📦 Create unsigned IPA
         run: |
@@ -50,6 +80,8 @@ jobs:
           mkdir -p Payload
           cp -r Runner.app Payload/
           zip -r vikunja-unsigned.ipa Payload/
+          echo "Unsigned IPA created successfully"
+          ls -la *.ipa
 
       - name: 📤 Upload unsigned IPA as artifact
         uses: actions/upload-artifact@v4
@@ -80,27 +112,60 @@ jobs:
       - name: 📦 Install Flutter dependencies
         run: flutter pub get
 
-      - name: 🍎 Install CocoaPods
+      - name: 🍎 Update CocoaPods and Clean Cache
+        run: |
+          echo "Current CocoaPods version:"
+          pod --version
+          echo "Updating CocoaPods to latest version..."
+          sudo gem install cocoapods
+          echo "Updated CocoaPods version:"
+          pod --version
+          echo "Cleaning CocoaPods cache..."
+          pod cache clean --all
+          echo "Updating CocoaPods repositories..."
+          pod repo update
+
+      - name: 🍎 Install CocoaPods with Retry Logic
         run: |
           cd ios
-          pod install
+          echo "Removing existing Podfile.lock and Pods directory..."
+          rm -rf Podfile.lock Pods
+          echo "Installing CocoaPods dependencies..."
+          for i in {1..3}; do
+            echo "Attempt $i of 3"
+            if pod install --verbose; then
+              echo "Pod install successful"
+              break
+            else
+              echo "Pod install failed, attempt $i"
+              if [ $i -eq 3 ]; then
+                echo "Pod install failed after 3 attempts"
+                exit 1
+              fi
+              sleep 10
+            fi
+          done
 
       - name: 🏗️ Build Flutter iOS for release
         run: |
-          flutter build ios --release --no-codesign
+          echo "Building Flutter iOS app for release..."
+          flutter build ios --release --no-codesign --verbose
 
       - name: 💎 Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.0'
+          ruby-version: '3.2'
           bundler-cache: false
 
-      - name: 📦 Install Fastlane
+      - name: 📦 Install Fastlane with Better Error Handling
         run: |
           cd ios
+          echo "Installing Bundler and Fastlane..."
           gem install bundler
           bundle config path vendor/bundle
-          bundle install
+          bundle install --verbose
+          echo "Fastlane version:"
+          bundle exec fastlane --version
 
       - name: 🔐 Configure Fastlane Match
         env:
@@ -111,6 +176,9 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           cd ios
+          echo "Configuring Fastlane Match for code signing..."
+          echo "Match configuration:"
+          cat fastlane/Matchfile
           bundle exec fastlane signing
         continue-on-error: true
 
@@ -127,7 +195,10 @@ jobs:
           CONTACT_PHONE: ${{ secrets.CONTACT_PHONE }}
         run: |
           cd ios
-          bundle exec fastlane beta
+          echo "Building signed IPA with Fastlane..."
+          echo "Fastlane configuration:"
+          cat fastlane/Fastfile
+          bundle exec fastlane beta --verbose
         continue-on-error: true
 
       - name: 📤 Upload signed IPA as artifact
@@ -135,4 +206,14 @@ jobs:
         with:
           name: vikunja-ios-signed-ipa
           path: ios/*.ipa
+        continue-on-error: true
+
+      - name: 📋 List build artifacts
+        run: |
+          echo "=== Build Artifacts ==="
+          find . -name "*.ipa" -type f -exec ls -la {} \;
+          echo "=== iOS Build Directory ==="
+          ls -la ios/ || echo "No ios directory found"
+          echo "=== Fastlane Output ==="
+          ls -la ios/fastlane/ || echo "No fastlane directory found"
         continue-on-error: true

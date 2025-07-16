@@ -8,11 +8,11 @@ workspace:
 clone:
   depth: 50
 
-# Only run on prs or pushes to master
+# Only run on prs or pushes to main
 trigger:
   branch:
     include:
-      - master
+      - main
   event:
     include:
       - push
@@ -45,7 +45,7 @@ depends_on:
 
 trigger:
   branch:
-    - master
+    - main
   event:
     - push
 
@@ -81,7 +81,7 @@ steps:
       path_style: true
       strip_prefix: apks/
       source: apks/*
-      target: /app/master
+      target: /app/main
 
 ---
 kind: pipeline
@@ -133,24 +133,36 @@ kind: pipeline
 type: exec
 name: release-ios
 
-
 trigger:
   event:
     - push
   branch:
-    - master
+    - main
 
 platform:
   os: darwin
   arch: amd64
 
-
 steps:
-  - name: build
+  - name: prepare-environment
     commands:
-      - make build-ios
+      - echo "Preparing iOS build environment..."
+      - echo "Updating CocoaPods..."
+      - gem install cocoapods
+      - pod --version
+      - echo "Updating CocoaPods repositories..."
+      - pod repo update
     environment:
       HOME: /Users/buildslave
+
+  - name: build
+    commands:
+      - echo "Building iOS app..."
+      - make build-ios
+      - echo "iOS build completed"
+    environment:
+      HOME: /Users/buildslave
+
   - name: deploy
     environment:
       HOME: /Users/buildslave
@@ -177,13 +189,18 @@ steps:
       CONTACT_PHONE:
         from_secret: contact_phone
     commands:
+      - echo "Starting iOS deployment process..."
       - eval "$(rbenv init -)"
       - rbenv shell 2.5.0
       - cd ios
+      - echo "Setting up Bundler..."
       - bundle config set --local path '.vendor/bundle'
-      - bundle install
+      - bundle install --verbose
+      - echo "Running Fastlane signing..."
       - bundle exec fastlane ios signing
+      - echo "Running Fastlane beta deployment..."
       - bundle exec fastlane ios beta
+      - echo "iOS deployment completed"
 
 depends_on:
   - testing
