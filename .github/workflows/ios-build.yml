@@ -52,26 +52,26 @@ jobs:
           cd ios
           echo "Removing existing Podfile.lock and Pods directory..."
           rm -rf Podfile.lock Pods
-                      echo "Installing CocoaPods dependencies with architecture fix..."
-            for i in {1..3}; do
-              echo "Attempt $i of 3"
-              if pod install --verbose; then
-                echo "Pod install successful"
-                echo "Verifying architecture configuration in generated Pods project..."
-                echo "Checking Pods project configuration:"
-                find Pods -name "*.xcconfig" -exec grep -l "ARCHS\|VALID_ARCHS" {} \; | head -5 || echo "No architecture configs found"
-                break
-              else
-                echo "Pod install failed, attempt $i"
-                if [ $i -eq 3 ]; then
-                  echo "Pod install failed after 3 attempts"
-                  exit 1
-                fi
-                sleep 10
+          echo "Installing CocoaPods dependencies with architecture fix..."
+          for i in {1..3}; do
+            echo "Attempt $i of 3"
+            if pod install --verbose; then
+              echo "Pod install successful"
+              echo "Verifying architecture configuration in generated Pods project..."
+              echo "Checking Pods project configuration:"
+              find Pods -name "*.xcconfig" -exec grep -l "ARCHS\|VALID_ARCHS" {} \; | head -5 || echo "No architecture configs found"
+              break
+            else
+              echo "Pod install failed, attempt $i"
+              if [ $i -eq 3 ]; then
+                echo "Pod install failed after 3 attempts"
+                exit 1
               fi
-            done
+              sleep 10
+            fi
+          done
 
-        - name: 🧹 Clean iOS Build Directory
+      - name: 🧹 Clean iOS Build Directory
         run: |
           echo "Cleaning iOS build directory..."
           cd ios
@@ -257,26 +257,26 @@ jobs:
           cd ios
           echo "Removing existing Podfile.lock and Pods directory..."
           rm -rf Podfile.lock Pods
-                      echo "Installing CocoaPods dependencies with architecture fix..."
-            for i in {1..3}; do
-              echo "Attempt $i of 3"
-              if pod install --verbose; then
-                echo "Pod install successful"
-                echo "Verifying architecture configuration in generated Pods project..."
-                echo "Checking Pods project configuration:"
-                find Pods -name "*.xcconfig" -exec grep -l "ARCHS\|VALID_ARCHS" {} \; | head -5 || echo "No architecture configs found"
-                break
-              else
-                echo "Pod install failed, attempt $i"
-                if [ $i -eq 3 ]; then
-                  echo "Pod install failed after 3 attempts"
-                  exit 1
-                fi
-                sleep 10
+          echo "Installing CocoaPods dependencies with architecture fix..."
+          for i in {1..3}; do
+            echo "Attempt $i of 3"
+            if pod install --verbose; then
+              echo "Pod install successful"
+              echo "Verifying architecture configuration in generated Pods project..."
+              echo "Checking Pods project configuration:"
+              find Pods -name "*.xcconfig" -exec grep -l "ARCHS\|VALID_ARCHS" {} \; | head -5 || echo "No architecture configs found"
+              break
+            else
+              echo "Pod install failed, attempt $i"
+              if [ $i -eq 3 ]; then
+                echo "Pod install failed after 3 attempts"
+                exit 1
               fi
-            done
+              sleep 10
+            fi
+          done
 
-        - name: 🏗️ Build Flutter iOS for release
+      - name: 🏗️ Build Flutter iOS for release
         run: |
           echo "Building Flutter iOS app for release..."
           echo "Flutter version:"
