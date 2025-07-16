@@ -99,7 +99,82 @@ jobs:
           echo "Flutter doctor:"
           flutter doctor
           echo "Starting flutter build ios command..."
-          flutter build ios --release --no-codesign --verbose
+          echo "=== Flutter Build Environment ==="
+          echo "Flutter channel: $(flutter channel)"
+          echo "Flutter version: $(flutter --version)"
+          echo "Xcode version: $(xcodebuild -version)"
+          echo "iOS SDK version: $(xcrun --sdk iphoneos --show-sdk-version)"
+          
+          echo "=== Checking iOS project structure ==="
+          ls -la ios/
+          ls -la ios/Runner/
+          
+          echo "=== Checking Flutter plugins ==="
+          flutter doctor -v
+          
+          echo "=== Checking for common iOS build issues ==="
+          echo "Checking iOS deployment target in pbxproj:"
+          grep -n "IPHONEOS_DEPLOYMENT_TARGET" ios/Runner.xcodeproj/project.pbxproj || echo "No deployment target found"
+          
+          echo "Checking Podfile platform:"
+          grep -n "platform :ios" ios/Podfile || echo "No platform found"
+          
+          echo "Checking Info.plist:"
+          ls -la ios/Runner/Info.plist
+          
+          echo "=== Checking pubspec.yaml for potential issues ==="
+          cat pubspec.yaml | grep -A5 -B5 "sdk\|flutter\|cupertino\|http" || echo "No specific dependencies found"
+          
+          echo "=== Attempting flutter clean and rebuild ==="
+          flutter clean
+          flutter pub get
+          
+          echo "=== Checking Flutter channel ==="
+          flutter channel
+          
+          echo "=== Checking for iOS-specific issues ==="
+          echo "Checking iOS entitlements:"
+          ls -la ios/Runner/*.entitlements || echo "No entitlements files found"
+          
+          echo "Checking iOS scheme:"
+          ls -la ios/Runner.xcodeproj/xcshareddata/xcschemes/ || echo "No schemes found"
+          
+          echo "=== Starting iOS build with more detailed output ==="
+          flutter build ios --release --no-codesign --verbose 2>&1 || {
+            echo "=== Build failed, trying alternative approach ==="
+            
+            # Try building with debug configuration
+            echo "Trying debug build..."
+            flutter build ios --debug --no-codesign --verbose 2>&1 || {
+              echo "Debug build also failed"
+            }
+            
+            echo "=== Checking for specific error files ==="
+            echo "Build directory contents:"
+            find build -name "*.log" -o -name "*.txt" 2>/dev/null | head -10 | while read file; do
+              echo "=== $file ==="
+              head -50 "$file" 2>/dev/null || echo "Cannot read file"
+            done
+            
+            echo "=== iOS build directory contents ==="
+            ls -la ios/build/ 2>/dev/null || echo "No ios/build directory"
+            find ios/build -name "*.log" 2>/dev/null | head -5 | while read file; do
+              echo "=== $file ==="
+              head -20 "$file" 2>/dev/null || echo "Cannot read file"
+            done
+            
+            echo "=== Checking for Flutter-specific error files ==="
+            find . -name "flutter_build.log" -o -name "flutter_export_environment.sh" 2>/dev/null | while read file; do
+              echo "=== $file ==="
+              head -30 "$file" 2>/dev/null || echo "Cannot read file"
+            done
+            
+            echo "=== Checking iOS project for compilation errors ==="
+            cd ios
+            xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -destination generic/platform=iOS build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO 2>&1 | head -100 || echo "Xcode build also failed"
+            
+            exit 1
+          }
 
       - name: 🔍 Debug build output
         run: |
