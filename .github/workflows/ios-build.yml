@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main # or your default branch name
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build-ios:
@@ -12,49 +15,124 @@ jobs:
 
     steps:
       - name: 📥 Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: ⚙️ Set up Node.js
-        uses: actions/setup-node@v3
+      - name: 🍎 Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
         with:
-          node-version: '20'
+          xcode-version: latest-stable
 
-      - name: 📦 Install global Ionic & Capacitor CLI
-        run: npm install -g @ionic/cli
+      - name: ⚙️ Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+          cache-path: "${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:"
+          pub-cache-key: "flutter-pub:os:-:channel:-:version:-:arch:-:hash:"
+          pub-cache-path: "${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:"
 
-      - name: 📦 Install project dependencies
-        run: npm ci
+      - name: 📦 Install Flutter dependencies
+        run: flutter pub get
 
-      - name: 🏗️ Build Ionic web assets
-        run: ionic build
-
-      - name: 🔗 Copy web to iOS native project
-        run: npx cap sync ios
-
-      - name: 📚 Install CocoaPods dependencies
+      - name: 🍎 Install CocoaPods
         run: |
-          cd ios/App
+          cd ios
           pod install
 
-      - name: 📦 Build Xcode archive
+      - name: 🏗️ Build Flutter iOS (No Code Sign)
         run: |
-          cd ios/App
-          xcodebuild -workspace App.xcworkspace \
-            -scheme App \
-            -sdk iphoneos \
-            -configuration Release \
-            -archivePath $PWD/build/App.xcarchive archive
+          flutter build ios --release --no-codesign
 
-      - name: 📦 Export unsigned IPA
+      - name: 📦 Create unsigned IPA
         run: |
-          cd ios/App
-          xcodebuild -exportArchive \
-            -archivePath $PWD/build/App.xcarchive \
-            -exportOptionsPlist exportOptions.plist \
-            -exportPath $PWD/build/export
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r vikunja-unsigned.ipa Payload/
 
-      - name: 📤 Upload IPA as artifact
+      - name: 📤 Upload unsigned IPA as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vikunja-ios-ipa
-          path: ios/App/build/export/*.ipa
+          name: vikunja-ios-unsigned-ipa
+          path: build/ios/iphoneos/vikunja-unsigned.ipa
+
+  build-ios-signed:
+    runs-on: macos-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-ios
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🍎 Setup Xcode  
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: ⚙️ Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 📦 Install Flutter dependencies
+        run: flutter pub get
+
+      - name: 🍎 Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: 🏗️ Build Flutter iOS for release
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: 💎 Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: false
+
+      - name: 📦 Install Fastlane
+        run: |
+          cd ios
+          gem install bundler
+          bundle config path vendor/bundle
+          bundle install
+
+      - name: 🔐 Configure Fastlane Match
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          cd ios
+          bundle exec fastlane signing
+        continue-on-error: true
+
+      - name: 🏗️ Build signed IPA with Fastlane
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
+          CONTACT_FIRST_NAME: ${{ secrets.CONTACT_FIRST_NAME }}
+          CONTACT_LAST_NAME: ${{ secrets.CONTACT_LAST_NAME }}
+          CONTACT_PHONE: ${{ secrets.CONTACT_PHONE }}
+        run: |
+          cd ios
+          bundle exec fastlane beta
+        continue-on-error: true
+
+      - name: 📤 Upload signed IPA as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vikunja-ios-signed-ipa
+          path: ios/*.ipa
+        continue-on-error: true
