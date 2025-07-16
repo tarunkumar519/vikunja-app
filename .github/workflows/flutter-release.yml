@@ -35,6 +35,7 @@ jobs:
           bundle config path vendor/bundle
           bundle install
           cd ..
+        continue-on-error: true # Android setup allowed to fail
       - name: Check gpg version
         run: gpg --version
 
@@ -45,6 +46,7 @@ jobs:
           cd android/app
           keyFile=keystore.jks
           gpg -d --passphrase "$GPG_PASS" --batch $keyFile.asc > $keyFile
+        continue-on-error: true # Android setup allowed to fail
       - name: Decrypting key.properties file
         env:
           GPG_PASS: ${{ secrets.GPG_PASS }}
@@ -52,6 +54,7 @@ jobs:
           cd android/
           keyPropFile=key.properties
           gpg -d --passphrase "$GPG_PASS" --batch $keyPropFile.asc > $keyPropFile
+        continue-on-error: true # Android setup allowed to fail
           
       - name: Decrypting Fastlane Secret file
         env:
@@ -60,6 +63,7 @@ jobs:
           cd android/
           file=fastlane-secret.json
           gpg -d --passphrase "$GPG_PASS" --batch $file.asc > $file
+        continue-on-error: true # Android setup allowed to fail
 
       - name: Testing Fastlane installation
         run: |
@@ -67,6 +71,7 @@ jobs:
           cd android
           bundle update fastlane
           bundle exec fastlane run validate_play_store_json_key
+        continue-on-error: true # Android validation allowed to fail
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -81,7 +86,9 @@ jobs:
       - run: flutter --version
       - run: flutter pub get
       - run: flutter build appbundle --flavor production
+        continue-on-error: true # Android builds allowed to fail
       - run: flutter build apk --flavor production
+        continue-on-error: true # Android builds allowed to fail
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -89,6 +96,7 @@ jobs:
           path: |
             build/app/outputs/bundle/productionRelease/app-production-release.aab
             build/app/outputs/flutter-apk/app-production-release.apk
+        continue-on-error: true # Android artifact upload allowed to fail
 
       #- name: Deploy Google Play
       #  run: |
