@@ -1,0 +1,60 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch: # allows you to run it manually
+  push:
+    branches:
+      - main # or your default branch name
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⚙️ Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: 📦 Install global Ionic & Capacitor CLI
+        run: npm install -g @ionic/cli
+
+      - name: 📦 Install project dependencies
+        run: npm ci
+
+      - name: 🏗️ Build Ionic web assets
+        run: ionic build
+
+      - name: 🔗 Copy web to iOS native project
+        run: npx cap sync ios
+
+      - name: 📚 Install CocoaPods dependencies
+        run: |
+          cd ios/App
+          pod install
+
+      - name: 📦 Build Xcode archive
+        run: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath $PWD/build/App.xcarchive archive
+
+      - name: 📦 Export unsigned IPA
+        run: |
+          cd ios/App
+          xcodebuild -exportArchive \
+            -archivePath $PWD/build/App.xcarchive \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath $PWD/build/export
+
+      - name: 📤 Upload IPA as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vikunja-ios-ipa
+          path: ios/App/build/export/*.ipa
